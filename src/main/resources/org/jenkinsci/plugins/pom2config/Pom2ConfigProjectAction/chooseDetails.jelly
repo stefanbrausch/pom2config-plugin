@@ -1,0 +1,103 @@
+<j:jelly xmlns:j="jelly:core" xmlns:st="jelly:stapler" xmlns:d="jelly:define" xmlns:l="/lib/layout" xmlns:t="/lib/hudson" xmlns:f="/lib/form">
+
+  <l:layout title="Pom2Config Plugin">
+    <l:side-panel>
+      <l:tasks>
+        <l:task icon="${resURL}/plugin/pom2config/icons/up-32x32.png" href="${rootURL}/" title="${%Back to Jenkins}" />
+      </l:tasks>
+    </l:side-panel>
+    <l:main-panel>
+      <h1>Pom2Config</h1>
+
+      <f:form action="${rootURL}/pom2config/setDetails" method="post" name="setDetails">
+      
+      <h2>${it.getDescriptions().getName()}</h2>
+      
+        <table>
+          <tr>
+            <th>Entry in Config</th>
+            <th>Entry in Pom File</th>
+            <th>Replace Former with Latter?</th>
+          </tr>
+      
+          <j:forEach items="${it.getDescriptions()}" var="detail">
+            <tr>
+              <td>${detail.getOldEntries().get(0)}</td>
+              <td>${detail.getNewEntries().get(0)}</td>
+              <td><f:checkbox name="replace" value="${detail.getName()}" checked="true" /></td>
+            </tr>
+          </j:forEach>
+        </table>
+        
+        <h2>${it.getEmailAddresses().getName()}</h2>
+        <table>
+          <tr>
+            <th></th>
+            <th></th>
+            <th>Use</th>
+            <th>Don't Use</th>
+          </tr>
+          <tr>
+            <td><b>Configuration Entries:</b></td>
+          </tr>
+          <j:forEach items="${it.getEmailAddresses().getOldEntries()}" var="entry">
+            <tr>
+              <td></td>
+              <td>${entry}</td>
+              <td><f:radio name="${entry}" value="use" checked="true"/></td>
+              <td><f:radio name="${entry}" value="dontUse"/></td>
+            </tr>
+          </j:forEach>
+          <tr>
+            <td><b>Pom Entries:</b></td>
+          </tr>
+          <j:forEach items="${it.getEmailAddresses().getNewEntries()}" var="entry">
+            <tr>
+              <td></td>
+              <td>${entry}</td>
+              <td><f:radio name="${entry}" value="use" checked="true"/></td>
+              <td><f:radio name="${entry}" value="dontUse"/></td>
+            </tr>
+          </j:forEach>
+        </table>
+        
+        <h2>${it.getScmUrls().getName()}</h2>
+        <table>
+          <tr>
+            <th></th>
+            <th></th>
+            <th>Use</th>
+            <th>Don't Use</th>
+          </tr>
+          <tr>
+            <td><b>Configuration Entries:</b></td>
+          </tr>
+          <j:forEach items="${it.getScmUrls().getOldEntries()}" var="entry">
+            <tr>
+              <td></td>
+              <td>${entry}</td>
+              <td><f:radio name="${entry}" value="use" checked="true"/></td>
+              <td><f:radio name="${entry}" value="dontUse"/></td>
+            </tr>
+          </j:forEach>
+          <tr>
+            <td><b>Pom Entries:</b></td>
+          </tr>
+          <j:forEach items="${it.getScmUrls().getNewEntries()}" var="entry">
+            <tr>
+              <td></td>
+              <td>${entry}</td>
+              <td><f:radio name="${entry}" value="use" checked="true"/></td>
+              <td><f:radio name="${entry}" value="dontUse"/></td>
+            </tr>
+          </j:forEach>
+        </table>
+ 
+        <f:entry>
+	      <f:submit value="${%Submit}" name="Submit"/>
+        </f:entry>
+      </f:form>
+
+    </l:main-panel>
+  </l:layout>
+</j:jelly>
