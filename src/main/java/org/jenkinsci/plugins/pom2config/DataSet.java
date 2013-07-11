@@ -7,35 +7,26 @@
  */
 package org.jenkinsci.plugins.pom2config;
 
-import java.util.ArrayList;
-import java.util.List;
-
 public class DataSet {
     private final String name;
-    private final List<String> oldEntries = new ArrayList<String>();
-    private final List<String> newEntries = new ArrayList<String>();
+    private final String oldEntry;
+    private final String newEntry;
    
-    DataSet(String name) {
+    DataSet(String name, String oldEntry, String newEntry) {
         this.name = name;
+        this.oldEntry = oldEntry;
+        this.newEntry = newEntry;
     }
     
     public String getName() {
         return name;
     }
     
-    protected void addOldEntry(String s) {
-        oldEntries.add(s);
+    public String getOldEntry() {
+        return oldEntry;
     }
     
-    protected void addNewEntry(String s) {
-        newEntries.add(s);
-    }
-
-    public List<String> getOldEntries() {
-        return oldEntries;
-    }
-    
-    public List<String> getNewEntries() {
-        return newEntries;
+    public String getNewEntry() {
+        return newEntry;
     }
 }

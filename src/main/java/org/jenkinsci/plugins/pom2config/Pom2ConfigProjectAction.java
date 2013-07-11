@@ -62,9 +62,14 @@ public class Pom2ConfigProjectAction implements Action {
     /** The project. */
     private final transient AbstractProject<?, ?> project;
     
-    private DataSet descriptions = new DataSet("Project Description");
-    private DataSet emailAddresses = new DataSet("Developer Email Addresses");
-    private DataSet scmUrls = new DataSet("SCM URLs");
+    private final String descLabel = "Project Description";
+    private final String emailLabel = "Developer Email Addresses";
+    private final String scmLabel = "SCM URLs";
+    
+    private List<DataSet> configDetails = new ArrayList<DataSet>();
+//    private DataSet descriptions = new DataSet("Project Description");
+//    private DataSet emailAddresses = new DataSet("Developer Email Addresses");
+//    private DataSet scmUrls = new DataSet("SCM URLs");
 
     /**
      * @param project
@@ -75,7 +80,7 @@ public class Pom2ConfigProjectAction implements Action {
         this.project = project;
     }
 
-    public DataSet getDescriptions() {
+/*    public DataSet getDescriptions() {
         return descriptions;
     }
 
@@ -86,11 +91,16 @@ public class Pom2ConfigProjectAction implements Action {
     public DataSet getScmUrls() {
         return scmUrls;
     }
+*/
 
+    public List<DataSet> getConfigDetails() {
+        return configDetails;
+    }
 
     public final void doGetPom(StaplerRequest req, StaplerResponse rsp) 
     throws IOException, ServletException, SAXException, XPathExpressionException {
-                
+        
+        configDetails.clear();
         String pomAsString = "";
         
         final JSONObject formData = req.getSubmittedForm().getJSONObject("fromWhere");
@@ -164,24 +174,9 @@ public class Pom2ConfigProjectAction implements Action {
             try {
                 Document doc = db.parse(is);
                 
-                descriptions.addOldEntry(project.getDescription());
-                for (String detailFromPom : retrieveDetailsFromPom(doc, "//description/text()")) {
-                    descriptions.addNewEntry(detailFromPom);
-                }
-
-                emailAddresses.addOldEntry(getProjectRecipients());
-                
-                for (String detailFromPom : retrieveDetailsFromPom(doc, "//developers/developer/email/text()")) {
-                    emailAddresses.addNewEntry(detailFromPom);
-                }
-                
-                for (String detailFromPom : getSCMPath(project)) {
-                    scmUrls.addOldEntry(detailFromPom);
-                }
-                for (String detailFromPom : retrieveDetailsFromPom(doc, "//scm/connection/text()")) {
-                    scmUrls.addNewEntry(detailFromPom);
-                }
-
+                configDetails.add(new DataSet(descLabel, project.getDescription(), retrieveDetailsFromPom(doc, "//description/text()")));
+                configDetails.add(new DataSet(emailLabel, getProjectRecipients(), retrieveDetailsFromPom(doc, "//developers/developer/email/text()")));
+                configDetails.add(new DataSet(scmLabel, getSCMPaths(project), retrieveDetailsFromPom(doc, "//scm/connection/text()")));
                 
             } catch (SAXException e) {
                 LOG.finest(e.toString());
@@ -201,7 +196,27 @@ public class Pom2ConfigProjectAction implements Action {
         rsp.sendRedirect("chooseDetails");
     }
     
-    private List<String> retrieveDetailsFromPom(Document doc, String path) {
+
+    private String retrieveDetailsFromPom(Document doc, String path) {
+        final XPath xpath = XPathFactory.newInstance().newXPath();
+        final StringBuilder builder = new StringBuilder();
+        NodeList nodes;
+        try {
+            XPathExpression expr = xpath.compile(path);
+            nodes = (NodeList) expr.evaluate(doc, XPathConstants.NODESET);
+            for (int i = 0; i < nodes.getLength(); i++) {
+//                LOG.finest(nodes.item(i).getNodeValue());
+                builder.append(nodes.item(i).getNodeValue());
+                builder.append(" ");
+            }
+        } catch (XPathExpressionException ex) {}
+        return builder.toString();
+        
+    }
+
+    
+    
+/*    private List<String> retrieveDetailsFromPom(Document doc, String path) {
         final List<String> list = new ArrayList<String>();
         final XPath xpath = XPathFactory.newInstance().newXPath();
         NodeList nodes;
@@ -216,20 +231,20 @@ public class Pom2ConfigProjectAction implements Action {
         return list;
         
     }
-    
+*/    
     /**
      * Finds the Git or SVN locations for a project.
      * @param item a job
      * @return Array of found SCM paths
      */
-    private List<String> getSCMPath(Item item) {
-        final List<String> scmPath = new ArrayList<String>();
+    private String getSCMPaths(Item item) {
+        final StringBuilder scmPaths = new StringBuilder();
         final SCM scm = ((AbstractProject<?, ?>) item).getScm();
 
         if (scm instanceof SubversionSCM) {
             final SubversionSCM svn = (SubversionSCM) scm;
             for (ModuleLocation location : svn.getLocations()) {
-                scmPath.add(location.remote);
+                scmPaths.append(location.remote);
                 LOG.fine(location.remote + " added");
             }
         } else if (scm instanceof GitSCM) {
@@ -237,12 +252,12 @@ public class Pom2ConfigProjectAction implements Action {
             
             for (RemoteConfig repo : git.getRepositories()) {
                 for (URIish urIish : repo.getURIs()) {
-                    scmPath.add(urIish.toString());
+                    scmPaths.append(urIish.toString());
                     LOG.fine(urIish.toString() + " added");
                 }
             }
         }
-        return scmPath;
+        return scmPaths.toString();
     }
     
     private String getProjectRecipients() throws IOException {
@@ -261,10 +276,37 @@ public class Pom2ConfigProjectAction implements Action {
 
     
         
-    public final void doSetDetails(StaplerRequest req, StaplerResponse rsp) {
+    public final void doSetDetails(StaplerRequest req, StaplerResponse rsp) throws IOException{
         
-        //gewünschte ersetzen
-        //und dann? wie Rückmeldung?
+        final String newDescription = req.getParameter(descLabel);
+        final String newAddresses = req.getParameter(emailLabel);
+        final String newScm = req.getParameter(scmLabel);
+        
+        try {
+            project.setDescription(newDescription);
+        } catch (IOException ex) {
+            LOG.finest("Unable to change project description." + ex.getMessage());
+        }
+       
+        //email-ext-Adressen ersetzen (wie?)
+        
+        
+        //scm-url ersetzen
+        
+        final String[] scmParts = newScm.split(":");
+        if (!"scm".equals(scmParts[0])){
+            //that's no scm address
+        } else if ("git".equals(scmParts[1])){
+            //it's git!
+        } else if ("svn".equals(scmParts[1])){
+            //it's svn
+        }
+        
+        //testen, ob SCM gleichgeblieben ist? -> was ändert das?
+        //welche Einstellungen möchte man vielleicht übernehmen?
+        //ggf. scm-Art ersetzen + Adresse
+        
+        //weiterleiten auf Seite, wo angezeigt, was ersetzt wurde/Fehlermeldungen ausgegeben?
     }
 
     
