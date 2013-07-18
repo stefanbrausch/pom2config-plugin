@@ -9,7 +9,7 @@
     <l:main-panel>
       <h1>Pom2Config</h1>
 
-      <f:form action="${rootURL}/pom2config/setDetails" method="post" name="setDetails">
+      <f:form action="setDetails" method="post" name="setDetails">
       
         <j:forEach items="${it.getConfigDetails()}" var="detail">
 

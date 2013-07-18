@@ -3,10 +3,11 @@ package org.jenkinsci.plugins.pom2config;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.io.OutputStream;
 import java.io.StringReader;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 import java.util.logging.Logger;
@@ -44,7 +45,13 @@ import hudson.scm.SubversionSCM;
 import hudson.scm.SubversionSCM.ModuleLocation;
 import hudson.tasks.Publisher;
 
+import hudson.plugins.git.BranchSpec;
 import hudson.plugins.git.GitSCM;
+import hudson.plugins.git.SubmoduleConfig;
+import hudson.plugins.git.UserMergeOptions;
+import hudson.plugins.git.UserRemoteConfig;
+import hudson.plugins.git.browser.GitRepositoryBrowser;
+import hudson.plugins.git.util.BuildChooser;
 import hudson.plugins.emailext.ExtendedEmailPublisher;
 import hudson.plugins.emailext.ExtendedEmailPublisherDescriptor;
 
@@ -65,6 +72,7 @@ public class Pom2ConfigProjectAction implements Action {
     private final String descLabel = "Project Description";
     private final String emailLabel = "Developer Email Addresses";
     private final String scmLabel = "SCM URLs";
+    private String message = "";
     
     private List<DataSet> configDetails = new ArrayList<DataSet>();
 //    private DataSet descriptions = new DataSet("Project Description");
@@ -276,37 +284,98 @@ public class Pom2ConfigProjectAction implements Action {
 
     
         
-    public final void doSetDetails(StaplerRequest req, StaplerResponse rsp) throws IOException{
+    public final void doSetDetails(StaplerRequest req, StaplerResponse rsp) throws IOException, URISyntaxException{
         
         final String newDescription = req.getParameter(descLabel);
         final String newAddresses = req.getParameter(emailLabel);
         final String newScm = req.getParameter(scmLabel);
+        final StringBuilder sb = new StringBuilder();
         
         try {
             project.setDescription(newDescription);
         } catch (IOException ex) {
             LOG.finest("Unable to change project description." + ex.getMessage());
         }
-       
+
         //email-ext-Adressen ersetzen (wie?)
         
         
         //scm-url ersetzen
-        
+        final SCM scm = project.getScm();
         final String[] scmParts = newScm.split(":");
         if (!"scm".equals(scmParts[0])){
             //that's no scm address
+            sb.append("NoSCM ");
+            LOG.finest("No SCM address");
         } else if ("git".equals(scmParts[1])){
-            //it's git!
+            sb.append("Git ");
+                        
+            if (scm instanceof GitSCM) {
+                final GitSCM gitSCM = (GitSCM) scm;
+                final List<UserRemoteConfig> remoteConfigList = new ArrayList<UserRemoteConfig>();
+                remoteConfigList.add(new UserRemoteConfig("hihi.git", null, null));
+
+                GitSCM newSCM = new GitSCM(gitSCM.getScmName(), 
+                                    remoteConfigList, 
+                                    gitSCM.getBranches(), 
+                                    gitSCM.getUserMergeOptions(),
+                                    gitSCM.getDoGenerate(), 
+                                    gitSCM.getSubmoduleCfg(), 
+                                    gitSCM.getClean(), 
+                                    gitSCM.getWipeOutWorkspace(),
+                                    gitSCM.getBuildChooser(), 
+                                    gitSCM.getBrowser(), 
+                                    gitSCM.getGitTool(), 
+                                    gitSCM.getAuthorOrCommitter(), 
+                                    gitSCM.getRelativeTargetDir(),
+                                    gitSCM.getReference(),
+                                    gitSCM.getExcludedRegions(), 
+                                    gitSCM.getExcludedUsers(), 
+                                    gitSCM.getLocalBranch(), 
+                                    gitSCM.getDisableSubmodules(),
+                                    gitSCM.getRecursiveSubmodules(), 
+                                    gitSCM.getPruneBranches(), 
+                                    gitSCM.getRemotePoll(),
+                                    gitSCM.getGitConfigName(), 
+                                    gitSCM.getGitConfigEmail(), 
+                                    gitSCM.getSkipTag(),
+                                    gitSCM.getIncludedRegions(),
+                                    gitSCM.isIgnoreNotifyCommit(),
+                                    gitSCM.getUseShallowClone());
+                
+                project.setScm(newSCM);
+                project.save();
+            } else {
+                GitSCM newSCM = new GitSCM("hihi.git");
+                project.setScm(newSCM);
+                project.save();
+            }
         } else if ("svn".equals(scmParts[1])){
-            //it's svn
+            sb.append("svn ");
+            
+            if (scm instanceof SubversionSCM) {
+                final SubversionSCM svnSCM = (SubversionSCM) scm;
+                
+                
+            } else {
+                
+            }
         }
+        
+        
         
         //testen, ob SCM gleichgeblieben ist? -> was ändert das?
         //welche Einstellungen möchte man vielleicht übernehmen?
         //ggf. scm-Art ersetzen + Adresse
         
         //weiterleiten auf Seite, wo angezeigt, was ersetzt wurde/Fehlermeldungen ausgegeben?
+        message = sb.toString();
+        LOG.finest(message);
+        rsp.sendRedirect("showOutcome");
+    }
+    
+    public String getMessage() {
+        return message;
     }
 
     
