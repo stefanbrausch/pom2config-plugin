@@ -25,6 +25,7 @@ import javax.xml.xpath.XPathFactory;
 import net.sf.json.JSONObject;
 
 import org.apache.commons.fileupload.FileItem;
+import org.apache.commons.lang.StringUtils;
 import org.kohsuke.stapler.StaplerRequest;
 import org.kohsuke.stapler.StaplerResponse;
 import org.w3c.dom.Document;
@@ -39,11 +40,16 @@ import hudson.XmlFile;
 import hudson.model.AbstractItem;
 import hudson.model.AbstractProject;
 import hudson.model.Action;
+import hudson.model.Descriptor;
+import hudson.model.Hudson;
 import hudson.model.Item;
 import hudson.scm.SCM;
+import hudson.scm.SubversionRepositoryBrowser;
 import hudson.scm.SubversionSCM;
 import hudson.scm.SubversionSCM.ModuleLocation;
+import hudson.scm.subversion.WorkspaceUpdater;
 import hudson.tasks.Publisher;
+import hudson.util.DescribableList;
 
 import hudson.plugins.git.BranchSpec;
 import hudson.plugins.git.GitSCM;
@@ -75,9 +81,9 @@ public class Pom2ConfigProjectAction implements Action {
     private String message = "";
     
     private List<DataSet> configDetails = new ArrayList<DataSet>();
-//    private DataSet descriptions = new DataSet("Project Description");
-//    private DataSet emailAddresses = new DataSet("Developer Email Addresses");
-//    private DataSet scmUrls = new DataSet("SCM URLs");
+    private DataSet descriptions = null;
+    private DataSet emailAddresses = null;
+    private DataSet scmUrls = null;
 
     /**
      * @param project
@@ -182,9 +188,17 @@ public class Pom2ConfigProjectAction implements Action {
             try {
                 Document doc = db.parse(is);
                 
-                configDetails.add(new DataSet(descLabel, project.getDescription(), retrieveDetailsFromPom(doc, "//description/text()")));
-                configDetails.add(new DataSet(emailLabel, getProjectRecipients(), retrieveDetailsFromPom(doc, "//developers/developer/email/text()")));
-                configDetails.add(new DataSet(scmLabel, getSCMPaths(project), retrieveDetailsFromPom(doc, "//scm/connection/text()")));
+                descriptions = new DataSet(descLabel, project.getDescription(), retrieveDetailsFromPom(doc, "//description/text()"));
+                emailAddresses = new DataSet(emailLabel, getProjectRecipients(), retrieveDetailsFromPom(doc, "//developers/developer/email/text()"));
+                scmUrls = new DataSet(scmLabel, getSCMPaths(project), retrieveDetailsFromPom(doc, "//scm/connection/text()"));
+                
+                configDetails.add(descriptions);
+                configDetails.add(emailAddresses);
+                configDetails.add(scmUrls);
+                
+//                configDetails.add(new DataSet(descLabel, project.getDescription(), retrieveDetailsFromPom(doc, "//description/text()")));
+//                configDetails.add(new DataSet(emailLabel, getProjectRecipients(), retrieveDetailsFromPom(doc, "//developers/developer/email/text()")));
+//                configDetails.add(new DataSet(scmLabel, getSCMPaths(project), retrieveDetailsFromPom(doc, "//scm/connection/text()")));
                 
             } catch (SAXException e) {
                 LOG.finest(e.toString());
@@ -213,7 +227,6 @@ public class Pom2ConfigProjectAction implements Action {
             XPathExpression expr = xpath.compile(path);
             nodes = (NodeList) expr.evaluate(doc, XPathConstants.NODESET);
             for (int i = 0; i < nodes.getLength(); i++) {
-//                LOG.finest(nodes.item(i).getNodeValue());
                 builder.append(nodes.item(i).getNodeValue());
                 builder.append(" ");
             }
@@ -285,88 +298,40 @@ public class Pom2ConfigProjectAction implements Action {
     
         
     public final void doSetDetails(StaplerRequest req, StaplerResponse rsp) throws IOException, URISyntaxException{
-        
         final String newDescription = req.getParameter(descLabel);
         final String newAddresses = req.getParameter(emailLabel);
         final String newScm = req.getParameter(scmLabel);
         final StringBuilder sb = new StringBuilder();
         
-        try {
-            project.setDescription(newDescription);
-        } catch (IOException ex) {
-            LOG.finest("Unable to change project description." + ex.getMessage());
-        }
-
-        //email-ext-Adressen ersetzen (wie?)
+        LOG.finest(req.getParameterMap().toString());
         
+        if (req.hasParameter("replace_" + descLabel)) {
+            try {
+                project.setDescription(newDescription);
+            } catch (IOException ex) {
+                LOG.finest("Unable to change project description." + ex.getMessage());
+            }
+            sb.append("Description replaced");
+        } else {
+            sb.append("Description not replaced");
+        }
+        
+        //email-ext-Adressen ersetzen (wie?)
+        if (req.hasParameter("replace_" + emailLabel)) {
+            replaceEmailAddresses(newAddresses);
+            sb.append("Email Addresses replaced");
+        } else {
+            sb.append("Email Addresses not replaced");
+        }
         
         //scm-url ersetzen
-        final SCM scm = project.getScm();
-        final String[] scmParts = newScm.split(":");
-        if (!"scm".equals(scmParts[0])){
-            //that's no scm address
-            sb.append("NoSCM ");
-            LOG.finest("No SCM address");
-        } else if ("git".equals(scmParts[1])){
-            sb.append("Git ");
-                        
-            if (scm instanceof GitSCM) {
-                final GitSCM gitSCM = (GitSCM) scm;
-                final List<UserRemoteConfig> remoteConfigList = new ArrayList<UserRemoteConfig>();
-                remoteConfigList.add(new UserRemoteConfig("hihi.git", null, null));
-
-                GitSCM newSCM = new GitSCM(gitSCM.getScmName(), 
-                                    remoteConfigList, 
-                                    gitSCM.getBranches(), 
-                                    gitSCM.getUserMergeOptions(),
-                                    gitSCM.getDoGenerate(), 
-                                    gitSCM.getSubmoduleCfg(), 
-                                    gitSCM.getClean(), 
-                                    gitSCM.getWipeOutWorkspace(),
-                                    gitSCM.getBuildChooser(), 
-                                    gitSCM.getBrowser(), 
-                                    gitSCM.getGitTool(), 
-                                    gitSCM.getAuthorOrCommitter(), 
-                                    gitSCM.getRelativeTargetDir(),
-                                    gitSCM.getReference(),
-                                    gitSCM.getExcludedRegions(), 
-                                    gitSCM.getExcludedUsers(), 
-                                    gitSCM.getLocalBranch(), 
-                                    gitSCM.getDisableSubmodules(),
-                                    gitSCM.getRecursiveSubmodules(), 
-                                    gitSCM.getPruneBranches(), 
-                                    gitSCM.getRemotePoll(),
-                                    gitSCM.getGitConfigName(), 
-                                    gitSCM.getGitConfigEmail(), 
-                                    gitSCM.getSkipTag(),
-                                    gitSCM.getIncludedRegions(),
-                                    gitSCM.isIgnoreNotifyCommit(),
-                                    gitSCM.getUseShallowClone());
-                
-                project.setScm(newSCM);
-                project.save();
-            } else {
-                GitSCM newSCM = new GitSCM("hihi.git");
-                project.setScm(newSCM);
-                project.save();
-            }
-        } else if ("svn".equals(scmParts[1])){
-            sb.append("svn ");
-            
-            if (scm instanceof SubversionSCM) {
-                final SubversionSCM svnSCM = (SubversionSCM) scm;
-                
-                
-            } else {
-                
-            }
+        if (req.hasParameter("replace_" + scmLabel) && newScm != null && !newScm.isEmpty()) {
+            replaceScmUrl(newScm);
+            sb.append("SCM URL replaced");
+        } else {
+            sb.append("SCM URL not replaced");
         }
         
-        
-        
-        //testen, ob SCM gleichgeblieben ist? -> was ändert das?
-        //welche Einstellungen möchte man vielleicht übernehmen?
-        //ggf. scm-Art ersetzen + Adresse
         
         //weiterleiten auf Seite, wo angezeigt, was ersetzt wurde/Fehlermeldungen ausgegeben?
         message = sb.toString();
@@ -374,7 +339,98 @@ public class Pom2ConfigProjectAction implements Action {
         rsp.sendRedirect("showOutcome");
     }
     
+    private void replaceScmUrl(String newScmUrl) throws IOException{
+        final String[] scmParts = newScmUrl.split(":");
+        
+        if (!"scm".equals(scmParts[0].trim())){
+            LOG.finest("No SCM address");
+        } else if ("git".equals(scmParts[1])){
+            replaceGitUrl(scmParts[2] + ":" + scmParts[3].trim());
+        } else if ("svn".equals(scmParts[1])){
+            replaceSvnUrl(scmParts[2] + ":" + scmParts[3].trim());
+        }
+    }
+
+    private void replaceGitUrl(String newScmUrl) throws IOException{
+        final GitSCM newSCM;
+        final SCM scm = project.getScm();
+        if (scm instanceof GitSCM) {
+            final GitSCM gitSCM = (GitSCM) scm;
+            final List<UserRemoteConfig> remoteConfigList = new ArrayList<UserRemoteConfig>();
+            remoteConfigList.add(new UserRemoteConfig(newScmUrl, null, null));
+
+            newSCM = new GitSCM(gitSCM.getScmName(), 
+                                remoteConfigList, 
+                                gitSCM.getBranches(), 
+                                gitSCM.getUserMergeOptions(),
+                                gitSCM.getDoGenerate(), 
+                                gitSCM.getSubmoduleCfg(), 
+                                gitSCM.getClean(), 
+                                gitSCM.getWipeOutWorkspace(),
+                                gitSCM.getBuildChooser(), 
+                                gitSCM.getBrowser(), 
+                                gitSCM.getGitTool(), 
+                                gitSCM.getAuthorOrCommitter(), 
+                                gitSCM.getRelativeTargetDir(),
+                                gitSCM.getReference(),
+                                gitSCM.getExcludedRegions(), 
+                                gitSCM.getExcludedUsers(), 
+                                gitSCM.getLocalBranch(), 
+                                gitSCM.getDisableSubmodules(),
+                                gitSCM.getRecursiveSubmodules(), 
+                                gitSCM.getPruneBranches(), 
+                                gitSCM.getRemotePoll(),
+                                gitSCM.getGitConfigName(), 
+                                gitSCM.getGitConfigEmail(), 
+                                gitSCM.getSkipTag(),
+                                gitSCM.getIncludedRegions(),
+                                gitSCM.isIgnoreNotifyCommit(),
+                                gitSCM.getUseShallowClone());
+        } else {
+            newSCM = new GitSCM(newScmUrl);
+        }
+        project.setScm(newSCM);
+        project.save();
+    }
+
+    private void replaceSvnUrl(String newScmUrl) throws IOException{
+        final SubversionSCM newSCM;
+        final SCM scm = project.getScm();
+        if (scm instanceof SubversionSCM) {
+            final SubversionSCM svnSCM = (SubversionSCM) scm;
+            final List<ModuleLocation> locationList = new ArrayList<ModuleLocation>();
+            
+            //was ist local? wie verarbeitet man mehrere Locs?
+            final ModuleLocation location = new ModuleLocation(newScmUrl, null);
+            locationList.add(location);
+            
+            newSCM = new SubversionSCM(locationList,
+                    svnSCM.getWorkspaceUpdater(),
+                    svnSCM.getBrowser(),
+                    svnSCM.getExcludedRegions(),
+                    svnSCM.getExcludedUsers(),
+                    svnSCM.getExcludedRevprop(),
+                    svnSCM.getExcludedCommitMessages(),
+                    svnSCM.getIncludedRegions(),
+                    svnSCM.isIgnoreDirPropChanges(),
+                    svnSCM.isFilterChangelog());
+        } else {
+            newSCM = new SubversionSCM(newScmUrl);
+        }
+        project.setScm(newSCM);
+        project.save();
+    }
+
+    private void replaceEmailAddresses(String newAddresses) throws IOException{
+        String addresses = newAddresses.trim().replace(" ", ",");
+        ExtendedEmailPublisher publisher = project.getPublishersList().get(ExtendedEmailPublisher.class);
+        publisher.recipientList = addresses;
+        project.save();
+    }
+    
+    
     public String getMessage() {
+        LOG.finest("HALLO! " + message);
         return message;
     }
 

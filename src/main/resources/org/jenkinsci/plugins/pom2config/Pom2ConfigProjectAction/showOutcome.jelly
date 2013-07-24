@@ -9,9 +9,21 @@
     <l:main-panel>
       <h1>Pom2Config</h1>
       
-      Huhu
-      ${it.getMessage()}
+      1 - ${it.getMessage()} <br />
+      
+      2 - ${it} <br />
+   
+      3 - ${it.getConfigDetails().size()}
+      
+      4- ${it.getIconFileName()}
+   
+     <j:forEach items="${it.getConfigDetails()}" var="detail">
 
+${detail.getName()}  <br />
+${detail.getOldEntry()}  <br />
+------------  <br />
+        </j:forEach>
+	
     </l:main-panel>
   </l:layout>
 </j:jelly>
