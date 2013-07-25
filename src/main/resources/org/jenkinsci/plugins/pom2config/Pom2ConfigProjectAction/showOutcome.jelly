@@ -6,24 +6,16 @@
         <l:task icon="${resURL}/plugin/pom2config/icons/up-32x32.png" href="${rootURL}/" title="${%Back to Jenkins}" />
       </l:tasks>
     </l:side-panel>
+    
     <l:main-panel>
       <h1>Pom2Config</h1>
       
-      1 - ${it.getMessage()} <br />
+      ${it.getMessages().size()}
       
-      2 - ${it} <br />
-   
-      3 - ${it.getConfigDetails().size()}
-      
-      4- ${it.getIconFileName()}
-   
-     <j:forEach items="${it.getConfigDetails()}" var="detail">
+      <j:forEach items="${it.getMessages()}" var="message">
+        ${message} <br />
+      </j:forEach>
 
-${detail.getName()}  <br />
-${detail.getOldEntry()}  <br />
-------------  <br />
-        </j:forEach>
-	
     </l:main-panel>
   </l:layout>
 </j:jelly>

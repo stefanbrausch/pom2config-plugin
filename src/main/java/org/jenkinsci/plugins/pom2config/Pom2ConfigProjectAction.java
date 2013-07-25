@@ -4,11 +4,10 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.StringReader;
+import java.io.Writer;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Iterator;
 import java.util.List;
 import java.util.logging.Logger;
 
@@ -25,7 +24,7 @@ import javax.xml.xpath.XPathFactory;
 import net.sf.json.JSONObject;
 
 import org.apache.commons.fileupload.FileItem;
-import org.apache.commons.lang.StringUtils;
+import org.kohsuke.stapler.Stapler;
 import org.kohsuke.stapler.StaplerRequest;
 import org.kohsuke.stapler.StaplerResponse;
 import org.w3c.dom.Document;
@@ -35,21 +34,19 @@ import org.xml.sax.SAXException;
 import org.xml.sax.XMLReader;
 import org.xml.sax.helpers.XMLReaderFactory;
 
+import hudson.FilePath;
 import hudson.Functions;
 import hudson.XmlFile;
-import hudson.model.AbstractItem;
 import hudson.model.AbstractProject;
-import hudson.model.Action;
-import hudson.model.Descriptor;
 import hudson.model.Hudson;
+import hudson.model.Action;
 import hudson.model.Item;
 import hudson.scm.SCM;
 import hudson.scm.SubversionRepositoryBrowser;
 import hudson.scm.SubversionSCM;
 import hudson.scm.SubversionSCM.ModuleLocation;
 import hudson.scm.subversion.WorkspaceUpdater;
-import hudson.tasks.Publisher;
-import hudson.util.DescribableList;
+import hudson.triggers.SCMTrigger;
 
 import hudson.plugins.git.BranchSpec;
 import hudson.plugins.git.GitSCM;
@@ -59,7 +56,6 @@ import hudson.plugins.git.UserRemoteConfig;
 import hudson.plugins.git.browser.GitRepositoryBrowser;
 import hudson.plugins.git.util.BuildChooser;
 import hudson.plugins.emailext.ExtendedEmailPublisher;
-import hudson.plugins.emailext.ExtendedEmailPublisherDescriptor;
 
 import org.eclipse.jgit.transport.RemoteConfig;
 import org.eclipse.jgit.transport.URIish;
@@ -78,7 +74,7 @@ public class Pom2ConfigProjectAction implements Action {
     private final String descLabel = "Project Description";
     private final String emailLabel = "Developer Email Addresses";
     private final String scmLabel = "SCM URLs";
-    private String message = "";
+    private List<String> messages = new ArrayList<String>();
     
     private List<DataSet> configDetails = new ArrayList<DataSet>();
     private DataSet descriptions = null;
@@ -111,53 +107,70 @@ public class Pom2ConfigProjectAction implements Action {
         return configDetails;
     }
 
-    public final void doGetPom(StaplerRequest req, StaplerResponse rsp) 
-    throws IOException, ServletException, SAXException, XPathExpressionException {
-        
-        configDetails.clear();
+    public final void doGetPom(StaplerRequest req, StaplerResponse rsp) throws IOException {
+
+        final String notRetrieved = "Unable to retrieve pom file.";
+        final String notParsed = "Unable to parse pom file.";
+        final Writer writer = rsp.getCompressedWriter(req);
+
         String pomAsString = "";
         
-        final JSONObject formData = req.getSubmittedForm().getJSONObject("fromWhere");
-        LOG.finest(formData.toString());
+        try {
+            pomAsString = retrievePom(req.getSubmittedForm().getJSONObject("fromWhere"));
+        } catch (IOException ioe) {
+            writeErrorMessage(notRetrieved, writer);
+        } catch (InterruptedException ie) {
+            writeErrorMessage(notRetrieved, writer);
+        } catch (ServletException se) {
+            writeErrorMessage(notRetrieved, writer);
+        }
         
-        if ("useExisting".equals(formData.getString("value"))) {
-
-            //checkout pom from repo
-/*            String[] scmPath = null;
-            final SCM scm = ((AbstractProject<?, ?>) project).getScm();
-            if (scm instanceof SubversionSCM) {
-                final SubversionSCM svn = (SubversionSCM) scm;
-                final ModuleLocation[] locs = svn.getLocations();
-                scmPath = new String[locs.length];
-                for (int i = 0; i < locs.length; i++) {
-                    final ModuleLocation moduleLocation = locs[i];
-                    scmPath[i] = moduleLocation.remote;
-                    LOG.fine(scmPath[i] + " added");
-                }
-            } else if (scm instanceof GitSCM) {
-                final GitSCM git = (GitSCM) scm;
-                final List<RemoteConfig> repoList = git.getRepositories();
-
-                scmPath = new String[repoList.size()];
-                for (int i = 0; i < repoList.size(); i++) {
-                    final List<URIish> uris = repoList.get(i).getURIs();
-                    for (final Iterator iterator = uris.iterator(); iterator.hasNext();) {
-                        final URIish urIish = (URIish) iterator.next();
-                        scmPath[i] = urIish.toString();
-                        LOG.fine(scmPath[i] + " added");
-                    }
+        if (!pomAsString.isEmpty()) {
+            try {
+                parsePom(pomAsString);
+            } catch (ParserConfigurationException e) {
+                writeErrorMessage(notParsed, writer);
+            } catch (SAXException e) {
+                writeErrorMessage(notParsed, writer);
+            } catch (IOException e) {
+                writeErrorMessage(notParsed, writer);
+            }
+            rsp.sendRedirect("chooseDetails");
+        } else {
+            writeErrorMessage(notRetrieved, writer);
+        }
+        
+    }
+    
+    private void writeErrorMessage(String message, Writer writer) throws IOException {
+        try {
+            writer.append(message + "\n");
+        } finally {
+            writer.close();
+        }
+    }
+    
+    private String retrievePom(JSONObject formData) throws ServletException, IOException, InterruptedException {
+        String pomAsString = "";
+        final String fromWhere = formData.getString("value");
+        
+        if ("useExisting".equals(fromWhere)) {
+            
+            project.getTrigger(SCMTrigger.class).run();
+            //woher weiß ich, wann er durch ist?
+            
+            FilePath workspace = project.getSomeWorkspace();
+            if (project.getLastBuild() != null && project.getLastBuild().getWorkspace() != null) {
+                workspace = project.getLastBuild().getWorkspace();
+            }
+            
+            if (workspace != null) {
+                FilePath pomPath = workspace.child("pom.xml");
+                if (pomPath.exists()){
+                    pomAsString = pomPath.readToString();
                 }
             }
-*/
-            
-            //subversionSCM.getBrowser().getFileLink(SubversionChangeLogSet.Path path)
-
-            //wie kommt man an svnUrl ran?
-            //project.getScm().getType()
-            //project.getScm().getDescriptor().getConfigFile()?
-            
-            //find existing
-        } else if ("fromUrl".equals(formData.getString("value"))){
+        } else if ("fromUrl".equals(fromWhere)){
             final URL pomURL = new URL(formData.getString("location"));
             BufferedReader in = new BufferedReader(
                 new InputStreamReader(pomURL.openStream()));
@@ -168,57 +181,37 @@ public class Pom2ConfigProjectAction implements Action {
                 builder.append(inputLine);
             }
             in.close();
-            
             pomAsString = builder.toString();
-            
-            
         } else {
-            final FileItem fileItem = req.getFileItem(formData.getString("file"));
+            final FileItem fileItem = Stapler.getCurrentRequest().getFileItem(formData.getString("file"));
             pomAsString = fileItem.getString();
         }
         
-        //pom-String parsen
-        String xml = pomAsString;
-        DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
-        DocumentBuilder db = null;
-        try {
-            db = dbf.newDocumentBuilder();
-            InputSource is = new InputSource();
-            is.setCharacterStream(new StringReader(xml));
-            try {
-                Document doc = db.parse(is);
-                
-                descriptions = new DataSet(descLabel, project.getDescription(), retrieveDetailsFromPom(doc, "//description/text()"));
-                emailAddresses = new DataSet(emailLabel, getProjectRecipients(), retrieveDetailsFromPom(doc, "//developers/developer/email/text()"));
-                scmUrls = new DataSet(scmLabel, getSCMPaths(project), retrieveDetailsFromPom(doc, "//scm/connection/text()"));
-                
-                configDetails.add(descriptions);
-                configDetails.add(emailAddresses);
-                configDetails.add(scmUrls);
-                
-//                configDetails.add(new DataSet(descLabel, project.getDescription(), retrieveDetailsFromPom(doc, "//description/text()")));
-//                configDetails.add(new DataSet(emailLabel, getProjectRecipients(), retrieveDetailsFromPom(doc, "//developers/developer/email/text()")));
-//                configDetails.add(new DataSet(scmLabel, getSCMPaths(project), retrieveDetailsFromPom(doc, "//scm/connection/text()")));
-                
-            } catch (SAXException e) {
-                LOG.finest(e.toString());
-                // handle SAXException
-            } catch (IOException e) {
-                LOG.finest(e.toString());
-                // handle IOException
-            }
-        } catch (ParserConfigurationException e1) {
-            LOG.finest(e1.toString());
-            // handle ParserConfigurationException
-        }
-
-        //keine pom -> Fehlermeldung
-        
-        
-        rsp.sendRedirect("chooseDetails");
+        return pomAsString;
     }
     
+    
+    private void parsePom(String xml) throws ParserConfigurationException, SAXException, IOException {
+        configDetails.clear();
+        DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+        DocumentBuilder db = null;
+        db = dbf.newDocumentBuilder();
+        InputSource is = new InputSource();
+        is.setCharacterStream(new StringReader(xml));
 
+        Document doc = db.parse(is);
+
+        descriptions = new DataSet(descLabel, project.getDescription(), retrieveDetailsFromPom(doc, "//description/text()"));
+        emailAddresses = new DataSet(emailLabel, getProjectRecipients(), retrieveDetailsFromPom(doc,
+                "//developers/developer/email/text()"));
+        scmUrls = new DataSet(scmLabel, getSCMPaths(project), retrieveDetailsFromPom(doc, "//scm/connection/text()"));
+
+        configDetails.add(descriptions);
+        configDetails.add(emailAddresses);
+        configDetails.add(scmUrls);
+    }
+
+    
     private String retrieveDetailsFromPom(Document doc, String path) {
         final XPath xpath = XPathFactory.newInstance().newXPath();
         final StringBuilder builder = new StringBuilder();
@@ -235,24 +228,6 @@ public class Pom2ConfigProjectAction implements Action {
         
     }
 
-    
-    
-/*    private List<String> retrieveDetailsFromPom(Document doc, String path) {
-        final List<String> list = new ArrayList<String>();
-        final XPath xpath = XPathFactory.newInstance().newXPath();
-        NodeList nodes;
-        try {
-            XPathExpression expr = xpath.compile(path);
-            nodes = (NodeList) expr.evaluate(doc, XPathConstants.NODESET);
-            for (int i = 0; i < nodes.getLength(); i++) {
-                LOG.finest(nodes.item(i).getNodeValue());
-                list.add(nodes.item(i).getNodeValue());
-            }
-        } catch (XPathExpressionException ex) {}
-        return list;
-        
-    }
-*/    
     /**
      * Finds the Git or SVN locations for a project.
      * @param item a job
@@ -282,7 +257,6 @@ public class Pom2ConfigProjectAction implements Action {
     }
     
     private String getProjectRecipients() throws IOException {
-        
         String recipients = "";
         try {
             ExtendedEmailPublisher publisher = project.getPublishersList().get(
@@ -291,51 +265,53 @@ public class Pom2ConfigProjectAction implements Action {
         } catch (NullPointerException e) {
             recipients = "No email recipients set.";
         }
-        
         return recipients;
     }
 
-    
         
     public final void doSetDetails(StaplerRequest req, StaplerResponse rsp) throws IOException, URISyntaxException{
         final String newDescription = req.getParameter(descLabel);
         final String newAddresses = req.getParameter(emailLabel);
         final String newScm = req.getParameter(scmLabel);
-        final StringBuilder sb = new StringBuilder();
         
-        LOG.finest(req.getParameterMap().toString());
+        LOG.finest("descLabel: " + newDescription);
+        LOG.finest("emailLabel: " + newAddresses);
+        LOG.finest("scmLabel: " + newScm);
+
+        LOG.finest("repl_descLabel: " + req.getParameter("replace_" + descLabel));
+        LOG.finest("repl_emailLabel: " + req.getParameter("replace_" + emailLabel));
+        LOG.finest("repl_scmLabel: " + req.getParameter("replace_" + scmLabel));
         
-        if (req.hasParameter("replace_" + descLabel)) {
+        if (req.hasParameter("replace_" + descLabel) && !descLabel.trim().isEmpty()) {
             try {
                 project.setDescription(newDescription);
             } catch (IOException ex) {
                 LOG.finest("Unable to change project description." + ex.getMessage());
+                messages.add("Description not replaced");
             }
-            sb.append("Description replaced");
+            messages.add("Description replaced");
         } else {
-            sb.append("Description not replaced");
+            messages.add("Description not replaced");
         }
         
-        //email-ext-Adressen ersetzen (wie?)
-        if (req.hasParameter("replace_" + emailLabel)) {
+        if (req.hasParameter("replace_" + emailLabel) && !emailLabel.trim().isEmpty()) {
             replaceEmailAddresses(newAddresses);
-            sb.append("Email Addresses replaced");
+            messages.add("Email Addresses replaced");
         } else {
-            sb.append("Email Addresses not replaced");
+            messages.add("Email Addresses not replaced");
         }
         
         //scm-url ersetzen
-        if (req.hasParameter("replace_" + scmLabel) && newScm != null && !newScm.isEmpty()) {
+        if (req.hasParameter("replace_" + scmLabel) && !newScm.trim().isEmpty()) {
             replaceScmUrl(newScm);
-            sb.append("SCM URL replaced");
+            messages.add("SCM URL replaced");
         } else {
-            sb.append("SCM URL not replaced");
+            messages.add("SCM URL not replaced");
         }
         
+//        getMessages();
         
         //weiterleiten auf Seite, wo angezeigt, was ersetzt wurde/Fehlermeldungen ausgegeben?
-        message = sb.toString();
-        LOG.finest(message);
         rsp.sendRedirect("showOutcome");
     }
     
@@ -429,9 +405,11 @@ public class Pom2ConfigProjectAction implements Action {
     }
     
     
-    public String getMessage() {
-        LOG.finest("HALLO! " + message);
-        return message;
+    public List<String> getMessages() {
+        for (String s : messages) {
+            LOG.finest("MMMMMMMMMM: " + s);
+        }
+        return messages;
     }
 
     
