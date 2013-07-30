@@ -13,15 +13,15 @@ import hudson.plugins.emailext.ExtendedEmailPublisher;
 import java.io.IOException;
 import java.util.logging.Logger;
 
-public class Pom2ConfigEmailExt {
+public class EmailExtHandler {
     
-    private static final Logger LOG = Logger.getLogger(Pom2ConfigEmailExt.class.getName());
+    private static final Logger LOG = Logger.getLogger(EmailExtHandler.class.getName());
 
     /** The project. */
     private final transient AbstractProject<?, ?> project;
     
     
-    Pom2ConfigEmailExt (AbstractProject<?, ?> project) {
+    EmailExtHandler (AbstractProject<?, ?> project) {
         this.project = project;
     }
     

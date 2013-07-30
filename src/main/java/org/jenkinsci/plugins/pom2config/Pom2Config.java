@@ -43,9 +43,9 @@ import hudson.triggers.SCMTrigger;
 /**
  * @author Kathi Stutz
  */
-public class Pom2ConfigProjectAction implements Action {
+public class Pom2Config implements Action {
 
-    private static final Logger LOG = Logger.getLogger(Pom2ConfigProjectAction.class.getName());
+    private static final Logger LOG = Logger.getLogger(Pom2Config.class.getName());
 
     /** The project. */
     private final transient AbstractProject<?, ?> project;
@@ -60,18 +60,19 @@ public class Pom2ConfigProjectAction implements Action {
     private DataSet emailAddresses = null;
     private DataSet scmUrls = null;
     
-    private Pom2ConfigEmailExt emailExt = null;
+    private EmailExtHandler emailExt = null;
     private ScmUrlHandler scmHandler;
+    private List<String> scmUrlList = new ArrayList<String>();
     
     /**
      * @param project
      *            for which configurations should be returned.
      */
-    public Pom2ConfigProjectAction(AbstractProject<?, ?> project) {
+    public Pom2Config(AbstractProject<?, ?> project) {
         super();
         this.project = project;
         if (emailExtAvailable()) {
-            emailExt = new Pom2ConfigEmailExt(project);
+            emailExt = new EmailExtHandler(project);
         }
         scmHandler = new ScmUrlHandler(project);
         
@@ -81,6 +82,10 @@ public class Pom2ConfigProjectAction implements Action {
         return configDetails;
     }
     
+    public String getScmUrlLabel() {
+        return scmLabel;
+    }
+    
     private boolean emailExtAvailable() {
         try {
             new EmailType();
@@ -88,6 +93,27 @@ public class Pom2ConfigProjectAction implements Action {
         } catch (Throwable t) {
             return false;
         }
+    }
+
+    public boolean isPomInWorkspace() {
+        FilePath workspace = project.getSomeWorkspace();
+        if (project.getLastBuild() != null && project.getLastBuild().getWorkspace() != null) {
+            workspace = project.getLastBuild().getWorkspace();
+        }
+        
+        if (workspace != null) {
+            FilePath pomPath = workspace.child("pom.xml");
+            try {
+                if (pomPath.exists()){
+                    return true;
+                }
+            } catch (IOException ex) {
+                return false;
+            } catch (InterruptedException ex) {
+                return false;
+            }
+        }
+        return false;
     }
 
     public final void doGetPom(StaplerRequest req, StaplerResponse rsp) throws IOException {
@@ -124,27 +150,6 @@ public class Pom2ConfigProjectAction implements Action {
         }
     }
     
-    public boolean isPomInWorkspace() {
-        FilePath workspace = project.getSomeWorkspace();
-        if (project.getLastBuild() != null && project.getLastBuild().getWorkspace() != null) {
-            workspace = project.getLastBuild().getWorkspace();
-        }
-        
-        if (workspace != null) {
-            FilePath pomPath = workspace.child("pom.xml");
-            try {
-                if (pomPath.exists()){
-                    return true;
-                }
-            } catch (IOException ex) {
-                return false;
-            } catch (InterruptedException ex) {
-                return false;
-            }
-        }
-        return false;
-    }
-    
     private void writeErrorMessage(String message, Writer writer) throws IOException {
         try {
             writer.append(message + "\n");
@@ -158,12 +163,10 @@ public class Pom2ConfigProjectAction implements Action {
         final String fromWhere = formData.getString("value");
         
         if ("useExisting".equals(fromWhere)) {
-            
             FilePath workspace = project.getSomeWorkspace();
             if (project.getLastBuild() != null && project.getLastBuild().getWorkspace() != null) {
                 workspace = project.getLastBuild().getWorkspace();
             }
-            
             if (workspace != null) {
                 FilePath pomPath = workspace.child("pom.xml");
                 if (pomPath.exists()){
@@ -193,13 +196,11 @@ public class Pom2ConfigProjectAction implements Action {
     
     private void parsePom(String xml) throws ParserConfigurationException, SAXException, IOException {
         configDetails.clear();
-        DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
-        DocumentBuilder db = null;
-        db = dbf.newDocumentBuilder();
-        InputSource is = new InputSource();
+        final DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();
+        final DocumentBuilder db = dbf.newDocumentBuilder();
+        final InputSource is = new InputSource();
         is.setCharacterStream(new StringReader(xml));
-
-        Document doc = db.parse(is);
+        final Document doc = db.parse(is);
 
         descriptions = new DataSet(descLabel, project.getDescription(), retrieveDetailsFromPom(doc, "//description/text()"));
         configDetails.add(descriptions);
@@ -228,9 +229,13 @@ public class Pom2ConfigProjectAction implements Action {
             }
         } catch (XPathExpressionException ex) {}
         return builder.toString();
-        
     }
 
+    
+    public List<String> getScmUrlList() {
+        return scmUrlList;
+    }
+    
     public final void doSetDetails(StaplerRequest req, StaplerResponse rsp) throws IOException, URISyntaxException{
         final String newDescription = req.getParameter(descLabel);
         final String newAddresses = req.getParameter(emailLabel);

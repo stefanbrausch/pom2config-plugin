@@ -13,9 +13,16 @@
       
         <j:forEach items="${it.getConfigDetails()}" var="detail">
 
-          <f:optionalBlock title="${detail.getName()}" name="replace_${detail.getName()}" checked="true">
+          <f:optionalBlock title="${detail.getName()}" name="replace_${detail.getName()}" checked="${!detail.getNewEntry().trim().isEmpty()}">
             <f:entry title="Config entry" >
-              <f:readOnlyTextbox name="configEntry" value="${detail.getOldEntry()}" />
+              <j:choose>
+ 			    <j:when test="${detail.getName().equals(it.getScmUrlLabel()) and it.getScmUrlList().size() > 1}">
+ 			      
+ 			    </j:when>
+ 			    <j:otherwise>           
+                  <f:readOnlyTextbox name="configEntry" value="${detail.getOldEntry()}" />
+                </j:otherwise>
+              </j:choose>
             </f:entry>
           
             <f:entry title="Pom entry" >
