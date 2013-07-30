@@ -12,9 +12,18 @@
 
       <f:form action="getPom" method="post" name="getPom">
 
-        <f:radioBlock name="fromWhere" value="useExisting" title="${%Use existing pom file}" checked="true"/>
+		<j:set var="isPomAvailable" value="${it.isPomInWorkspace()}" />
 
-        <f:radioBlock name="fromWhere" value="fromUrl" title="${%Get it from url}">
+		<j:choose>
+		  <j:when test="${isPomAvailable}">
+            <f:radioBlock name="fromWhere" value="useExisting" title="${%Use existing pom file}" checked="true"/>
+          </j:when>
+          <j:otherwise>
+			<f:nested><i>No pom file found in workspace. Maybe you have to start a build first.</i></f:nested>
+          </j:otherwise>
+		</j:choose>
+		
+        <f:radioBlock name="fromWhere" value="fromUrl" title="${%Get it from url}" checked="${!isPomAvailable}">
 	      <f:entry title="${%Location: }" field="location">
     	    <f:textbox/>
           </f:entry>

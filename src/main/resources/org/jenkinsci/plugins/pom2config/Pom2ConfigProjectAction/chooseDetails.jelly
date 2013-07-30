@@ -15,11 +15,11 @@
 
           <f:optionalBlock title="${detail.getName()}" name="replace_${detail.getName()}" checked="true">
             <f:entry title="Config entry" >
-              <f:readOnlyTextbox value="${detail.getOldEntry()}" />
+              <f:readOnlyTextbox name="configEntry" value="${detail.getOldEntry()}" />
             </f:entry>
           
             <f:entry title="Pom entry" >
-              <f:textarea name="${detail.getName()}" value="${detail.getNewEntry()}" />
+              <f:textarea name="pomEntry" value="${detail.getNewEntry()}" />
             </f:entry>
           </f:optionalBlock>
           

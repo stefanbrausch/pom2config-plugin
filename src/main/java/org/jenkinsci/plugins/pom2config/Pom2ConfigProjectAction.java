@@ -37,6 +37,7 @@ import hudson.Functions;
 import hudson.model.AbstractProject;
 import hudson.model.Action;
 import hudson.plugins.emailext.EmailType;
+import hudson.triggers.SCMTrigger;
 
 
 /**
@@ -60,7 +61,7 @@ public class Pom2ConfigProjectAction implements Action {
     private DataSet scmUrls = null;
     
     private Pom2ConfigEmailExt emailExt = null;
-    private Pom2ConfigScmUrl scmHandler;
+    private ScmUrlHandler scmHandler;
     
     /**
      * @param project
@@ -72,22 +73,9 @@ public class Pom2ConfigProjectAction implements Action {
         if (emailExtAvailable()) {
             emailExt = new Pom2ConfigEmailExt(project);
         }
-        scmHandler = new Pom2ConfigScmUrl(project);
+        scmHandler = new ScmUrlHandler(project);
         
     }
-
-/*    public DataSet getDescriptions() {
-        return descriptions;
-    }
-
-    public DataSet getEmailAddresses() {
-        return emailAddresses;
-    }
-
-    public DataSet getScmUrls() {
-        return scmUrls;
-    }
-*/
 
     public List<DataSet> getConfigDetails() {
         return configDetails;
@@ -134,7 +122,27 @@ public class Pom2ConfigProjectAction implements Action {
         } else {
             writeErrorMessage(notRetrieved, writer);
         }
+    }
+    
+    public boolean isPomInWorkspace() {
+        FilePath workspace = project.getSomeWorkspace();
+        if (project.getLastBuild() != null && project.getLastBuild().getWorkspace() != null) {
+            workspace = project.getLastBuild().getWorkspace();
+        }
         
+        if (workspace != null) {
+            FilePath pomPath = workspace.child("pom.xml");
+            try {
+                if (pomPath.exists()){
+                    return true;
+                }
+            } catch (IOException ex) {
+                return false;
+            } catch (InterruptedException ex) {
+                return false;
+            }
+        }
+        return false;
     }
     
     private void writeErrorMessage(String message, Writer writer) throws IOException {
@@ -150,9 +158,6 @@ public class Pom2ConfigProjectAction implements Action {
         final String fromWhere = formData.getString("value");
         
         if ("useExisting".equals(fromWhere)) {
-            
-//            project.getTrigger(SCMTrigger.class).run();
-            //woher weiß ich, wann er durch ist?
             
             FilePath workspace = project.getSomeWorkspace();
             if (project.getLastBuild() != null && project.getLastBuild().getWorkspace() != null) {
