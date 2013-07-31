@@ -211,7 +211,8 @@ public class Pom2Config implements Action {
             configDetails.add(emailAddresses);
         }
         
-        scmUrls = new DataSet(scmLabel, scmHandler.getSCMPaths(), retrieveDetailsFromPom(doc, "//scm/connection/text()"));
+        scmUrlList = scmHandler.getSCMPaths();
+        scmUrls = new DataSet(scmLabel, scmHandler.getSCMPaths().get(0), retrieveDetailsFromPom(doc, "//scm/connection/text()"));
         configDetails.add(scmUrls);
     }
 
@@ -237,21 +238,27 @@ public class Pom2Config implements Action {
     }
     
     public final void doSetDetails(StaplerRequest req, StaplerResponse rsp) throws IOException, URISyntaxException{
-        final String newDescription = req.getParameter(descLabel);
-        final String newAddresses = req.getParameter(emailLabel);
-        final String newScm = req.getParameter(scmLabel);
+//        final String newDescription = req.getParameter(descLabel);
+//        final String newAddresses = req.getParameter(emailLabel);
+//        final String newScm = req.getParameter(scmLabel);
         
-        LOG.finest("descLabel: " + newDescription);
-        LOG.finest("emailLabel: " + newAddresses);
-        LOG.finest("scmLabel: " + newScm);
-
-        LOG.finest("repl_descLabel: " + req.getParameter("replace_" + descLabel));
-        LOG.finest("repl_emailLabel: " + req.getParameter("replace_" + emailLabel));
-        LOG.finest("repl_scmLabel: " + req.getParameter("replace_" + scmLabel));
+//        LOG.finest("descLabel: " + newDescription);
+//        LOG.finest("emailLabel: " + newAddresses);
+//        LOG.finest("scmLabel: " + newScm);
         
-        if (req.hasParameter("replace_" + descLabel) && !descLabel.trim().isEmpty()) {
+        JSONObject formData = null;
+        
+        try {
+            formData = req.getSubmittedForm();
+            LOG.finest(formData.toString(2));
+        } catch (ServletException e) {
+            // TODO Auto-generated catch block
+        }
+        
+        if (formData.containsKey(descLabel) 
+                && !formData.getJSONObject(descLabel).getString("pomEntry").trim().isEmpty()) {
             try {
-                project.setDescription(newDescription);
+                project.setDescription(formData.getJSONObject(descLabel).getString("pomEntry").trim());
             } catch (IOException ex) {
                 LOG.finest("Unable to change project description." + ex.getMessage());
                 messages.add("Description not replaced");
@@ -260,20 +267,27 @@ public class Pom2Config implements Action {
         } else {
             messages.add("Description not replaced");
         }
-        
-        if (req.hasParameter("replace_" + emailLabel) && !emailLabel.trim().isEmpty() && emailExt != null) {
-            emailExt.replaceEmailAddresses(newAddresses);
-            messages.add("Email Addresses replaced");
+
+        if (formData.containsKey(emailLabel)) {
+            final String newEmail = formData.getJSONObject(emailLabel).getString("pomEntry").trim();
+            if (!newEmail.isEmpty() && emailExt != null) {
+                emailExt.replaceEmailAddresses(newEmail);
+                messages.add("Email Addresses replaced");
+            }
         } else {
             messages.add("Email Addresses not replaced");
         }
         
         //scm-url ersetzen
-        if (req.hasParameter("replace_" + scmLabel) && !newScm.trim().isEmpty()) {
-            scmHandler.replaceScmUrl(newScm);
-            messages.add("SCM URL replaced");
+        if (formData.containsKey(scmLabel)) {
+            final String newScm = formData.getJSONObject(scmLabel).getString("pomEntry").trim();
+            final String oldScm = formData.getJSONObject(scmLabel).getString("configEntry").trim();
+            if (!newScm.isEmpty()) {
+                scmHandler.replaceScmUrl(oldScm, newScm);
+                messages.add("SCM Url replaced");
+            }
         } else {
-            messages.add("SCM URL not replaced");
+            messages.add("SCM Url not replaced");
         }
         
 //        getMessages();

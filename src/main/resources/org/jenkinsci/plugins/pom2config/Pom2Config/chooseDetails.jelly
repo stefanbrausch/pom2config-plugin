@@ -8,16 +8,20 @@
     </l:side-panel>
     <l:main-panel>
       <h1>Pom2Config</h1>
-
+	
       <f:form action="setDetails" method="post" name="setDetails">
       
         <j:forEach items="${it.getConfigDetails()}" var="detail">
 
-          <f:optionalBlock title="${detail.getName()}" name="replace_${detail.getName()}" checked="${!detail.getNewEntry().trim().isEmpty()}">
+          <f:optionalBlock title="${detail.getName()}" name="${detail.getName()}" checked="${!detail.getNewEntry().trim().isEmpty()}">
             <f:entry title="Config entry" >
               <j:choose>
  			    <j:when test="${detail.getName().equals(it.getScmUrlLabel()) and it.getScmUrlList().size() > 1}">
- 			      
+ 			      <select name="configEntry">
+                    <j:forEach items="${it.getScmUrlList()}" var="url">
+                      <f:option value="${url}">${url}</f:option>
+                    </j:forEach>
+ 			      </select>
  			    </j:when>
  			    <j:otherwise>           
                   <f:readOnlyTextbox name="configEntry" value="${detail.getOldEntry()}" />

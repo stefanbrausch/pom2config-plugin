@@ -9,6 +9,7 @@ package org.jenkinsci.plugins.pom2config;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.logging.Logger;
 
@@ -38,14 +39,15 @@ public class ScmUrlHandler {
      * @param item a job
      * @return Array of found SCM paths
      */
-    protected String getSCMPaths() {
-        final StringBuilder scmPaths = new StringBuilder();
+    protected List<String> getSCMPaths() {
+//        final StringBuilder scmPaths = new StringBuilder();
+        final List<String> scmPaths = new ArrayList<String>();
         final SCM scm = project.getScm();
         
         if (scm instanceof SubversionSCM) {
             final SubversionSCM svn = (SubversionSCM) scm;
             for (ModuleLocation location : svn.getLocations()) {
-                scmPaths.append(location.remote);
+                scmPaths.add(location.remote);
                 LOG.fine(location.remote + " added");
             }
         } else if (scm instanceof GitSCM) {
@@ -53,62 +55,51 @@ public class ScmUrlHandler {
             
             for (RemoteConfig repo : git.getRepositories()) {
                 for (URIish urIish : repo.getURIs()) {
-                    scmPaths.append(urIish.toString());
+                    scmPaths.add(urIish.toString());
                     LOG.fine(urIish.toString() + " added");
                 }
             }
         }
-        return scmPaths.toString();
+        return scmPaths;
     }
 
     
-    protected void replaceScmUrl(String newScmUrl) throws IOException{
+    protected void replaceScmUrl(String oldScmUrl, String newScmUrl) throws IOException{
         final String[] scmParts = newScmUrl.split(":");
-        
         if (!"scm".equals(scmParts[0].trim())){
             LOG.finest("No SCM address");
         } else if ("git".equals(scmParts[1])){
-            replaceGitUrl(scmParts[2] + ":" + scmParts[3].trim());
+            replaceGitUrl(oldScmUrl, scmParts[2] + ":" + scmParts[3].trim());
         } else if ("svn".equals(scmParts[1])){
-            replaceSvnUrl(scmParts[2] + ":" + scmParts[3].trim());
+            replaceSvnUrl(oldScmUrl, scmParts[2] + ":" + scmParts[3].trim());
         }
     }
 
-    private void replaceGitUrl(String newScmUrl) throws IOException{
+    private void replaceGitUrl(String oldScmUrl, String newScmUrl) throws IOException{
         final GitSCM newSCM;
         final SCM scm = project.getScm();
         if (scm instanceof GitSCM) {
             final GitSCM gitSCM = (GitSCM) scm;
-            final List<UserRemoteConfig> remoteConfigList = new ArrayList<UserRemoteConfig>();
-            remoteConfigList.add(new UserRemoteConfig(newScmUrl, null, null));
+            final List<UserRemoteConfig> oldRemoteConfigs = new ArrayList<UserRemoteConfig>(gitSCM.getUserRemoteConfigs());
+            for (UserRemoteConfig config : oldRemoteConfigs) {
+                if (config.getUrl().trim().equals(oldScmUrl)) {
+                    oldRemoteConfigs.remove(config);
+                    LOG.finest("Bingo! Found: " + config.getUrl());
+                    break;
+                }
+            }
+            
+            final List<UserRemoteConfig> newRemoteConfigList = new ArrayList<UserRemoteConfig>();
+            newRemoteConfigList.add(new UserRemoteConfig(newScmUrl, null, null));
+            newRemoteConfigList.addAll(oldRemoteConfigs);
 
-            newSCM = new GitSCM(gitSCM.getScmName(), 
-                                remoteConfigList, 
-                                gitSCM.getBranches(), 
-                                gitSCM.getUserMergeOptions(),
-                                gitSCM.getDoGenerate(), 
-                                gitSCM.getSubmoduleCfg(), 
-                                gitSCM.getClean(), 
-                                gitSCM.getWipeOutWorkspace(),
-                                gitSCM.getBuildChooser(), 
-                                gitSCM.getBrowser(), 
-                                gitSCM.getGitTool(), 
-                                gitSCM.getAuthorOrCommitter(), 
-                                gitSCM.getRelativeTargetDir(),
-                                gitSCM.getReference(),
-                                gitSCM.getExcludedRegions(), 
-                                gitSCM.getExcludedUsers(), 
-                                gitSCM.getLocalBranch(), 
-                                gitSCM.getDisableSubmodules(),
-                                gitSCM.getRecursiveSubmodules(), 
-                                gitSCM.getPruneBranches(), 
-                                gitSCM.getRemotePoll(),
-                                gitSCM.getGitConfigName(), 
-                                gitSCM.getGitConfigEmail(), 
-                                gitSCM.getSkipTag(),
-                                gitSCM.getIncludedRegions(),
-                                gitSCM.isIgnoreNotifyCommit(),
-                                gitSCM.getUseShallowClone());
+            newSCM = new GitSCM(gitSCM.getScmName(), newRemoteConfigList, gitSCM.getBranches(), gitSCM.getUserMergeOptions(),
+                    gitSCM.getDoGenerate(), gitSCM.getSubmoduleCfg(), gitSCM.getClean(), gitSCM.getWipeOutWorkspace(),
+                    gitSCM.getBuildChooser(), gitSCM.getBrowser(), gitSCM.getGitTool(), gitSCM.getAuthorOrCommitter(),
+                    gitSCM.getRelativeTargetDir(), gitSCM.getReference(), gitSCM.getExcludedRegions(), gitSCM.getExcludedUsers(),
+                    gitSCM.getLocalBranch(), gitSCM.getDisableSubmodules(), gitSCM.getRecursiveSubmodules(),
+                    gitSCM.getPruneBranches(), gitSCM.getRemotePoll(), gitSCM.getGitConfigName(), gitSCM.getGitConfigEmail(),
+                    gitSCM.getSkipTag(), gitSCM.getIncludedRegions(), gitSCM.isIgnoreNotifyCommit(), gitSCM.getUseShallowClone());
         } else {
             newSCM = new GitSCM(newScmUrl);
         }
@@ -116,25 +107,29 @@ public class ScmUrlHandler {
         project.save();
     }
 
-    private void replaceSvnUrl(String newScmUrl) throws IOException{
+    private void replaceSvnUrl(String oldScmUrl, String newScmUrl) throws IOException{
         final SubversionSCM newSCM;
         final SCM scm = project.getScm();
         if (scm instanceof SubversionSCM) {
             final SubversionSCM svnSCM = (SubversionSCM) scm;
-            final List<ModuleLocation> locationList = new ArrayList<ModuleLocation>();
+            final List<ModuleLocation> oldLocations = new ArrayList<ModuleLocation>(Arrays.asList(svnSCM.getProjectLocations(project)));
+
+            for (ModuleLocation location : oldLocations) {
+                if (location.remote.trim().equals(oldScmUrl)) {
+                    oldLocations.remove(location);
+                    LOG.finest("Bingo! Found: " + location.remote);
+                    break;
+                }
+            }
             
+            final List<ModuleLocation> locationList = new ArrayList<ModuleLocation>();
             final ModuleLocation location = new ModuleLocation(newScmUrl, null);
             locationList.add(location);
+            locationList.addAll(oldLocations);
             
-            newSCM = new SubversionSCM(locationList,
-                    svnSCM.getWorkspaceUpdater(),
-                    svnSCM.getBrowser(),
-                    svnSCM.getExcludedRegions(),
-                    svnSCM.getExcludedUsers(),
-                    svnSCM.getExcludedRevprop(),
-                    svnSCM.getExcludedCommitMessages(),
-                    svnSCM.getIncludedRegions(),
-                    svnSCM.isIgnoreDirPropChanges(),
+            newSCM = new SubversionSCM(locationList, svnSCM.getWorkspaceUpdater(), svnSCM.getBrowser(),
+                    svnSCM.getExcludedRegions(), svnSCM.getExcludedUsers(), svnSCM.getExcludedRevprop(),
+                    svnSCM.getExcludedCommitMessages(), svnSCM.getIncludedRegions(), svnSCM.isIgnoreDirPropChanges(),
                     svnSCM.isFilterChangelog());
         } else {
             newSCM = new SubversionSCM(newScmUrl);
