@@ -34,7 +34,6 @@ import org.xml.sax.SAXException;
 
 import hudson.FilePath;
 import hudson.Functions;
-import hudson.maven.MavenModuleSet;
 import hudson.model.AbstractProject;
 import hudson.model.Action;
 import hudson.plugins.emailext.EmailType;
@@ -95,16 +94,27 @@ public class Pom2Config implements Action {
 
     public boolean isPomInWorkspace() {
         FilePath workspace = project.getSomeWorkspace();
-        if (project.getLastBuild() != null && project.getLastBuild().getWorkspace() != null) {
-            workspace = project.getLastBuild().getWorkspace();
+        System.out.println("project.getSomeWorkspace().getParent(): " + project.getSomeWorkspace().getParent());
+        try {
+            System.out.println(String.valueOf(workspace.exists()));
+        } catch (IOException e) {
+            // TODO Auto-generated catch block
+        } catch (InterruptedException e) {
+            // TODO Auto-generated catch block
         }
         
-        if (project instanceof MavenModuleSet) {
+        if (project.getLastBuild() != null && project.getLastBuild().getWorkspace() != null) {
+            workspace = project.getLastBuild().getWorkspace();
+            System.out.println("project.getLastBuild().getWorkspace(): " + workspace.getParent());
+        }
+        
+/*        if (project instanceof MavenModuleSet) {
             LOG.finest("RootPom: " + ((MavenModuleSet) project).getRootPOM(null));
         }
-
+*/
         if (workspace != null) {
             FilePath pomPath = workspace.child("pom.xml");
+            System.out.println("pomPath: " + pomPath);
             try {
                 if (pomPath.exists()){
                     return true;
