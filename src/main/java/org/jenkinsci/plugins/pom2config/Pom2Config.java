@@ -34,10 +34,10 @@ import org.xml.sax.SAXException;
 
 import hudson.FilePath;
 import hudson.Functions;
+import hudson.maven.MavenModuleSet;
 import hudson.model.AbstractProject;
 import hudson.model.Action;
 import hudson.plugins.emailext.EmailType;
-import hudson.triggers.SCMTrigger;
 
 
 /**
@@ -61,12 +61,11 @@ public class Pom2Config implements Action {
     private DataSet scmUrls = null;
     
     private EmailExtHandler emailExt = null;
-    private ScmUrlHandler scmHandler;
+    private ScmHandler scmHandler;
     private List<String> scmUrlList = new ArrayList<String>();
     
     /**
      * @param project
-     *            for which configurations should be returned.
      */
     public Pom2Config(AbstractProject<?, ?> project) {
         super();
@@ -74,8 +73,7 @@ public class Pom2Config implements Action {
         if (emailExtAvailable()) {
             emailExt = new EmailExtHandler(project);
         }
-        scmHandler = new ScmUrlHandler(project);
-        
+        scmHandler = new ScmHandler(project);
     }
 
     public List<DataSet> getConfigDetails() {
@@ -101,6 +99,10 @@ public class Pom2Config implements Action {
             workspace = project.getLastBuild().getWorkspace();
         }
         
+        if (project instanceof MavenModuleSet) {
+            LOG.finest("RootPom: " + ((MavenModuleSet) project).getRootPOM(null));
+        }
+
         if (workspace != null) {
             FilePath pomPath = workspace.child("pom.xml");
             try {
@@ -117,7 +119,6 @@ public class Pom2Config implements Action {
     }
 
     public final void doGetPom(StaplerRequest req, StaplerResponse rsp) throws IOException {
-
         final String notRetrieved = "Unable to retrieve pom file.";
         final String notParsed = "Unable to parse pom file.";
         final Writer writer = rsp.getCompressedWriter(req);
@@ -212,7 +213,11 @@ public class Pom2Config implements Action {
         }
         
         scmUrlList = scmHandler.getSCMPaths();
-        scmUrls = new DataSet(scmLabel, scmHandler.getSCMPaths().get(0), retrieveDetailsFromPom(doc, "//scm/connection/text()"));
+        if (scmUrlList.size() > 0) {
+            scmUrls = new DataSet(scmLabel, scmHandler.getSCMPaths().get(0), retrieveDetailsFromPom(doc, "//scm/connection/text()"));
+        } else {
+            scmUrls = new DataSet(scmLabel, "", retrieveDetailsFromPom(doc, "//scm/connection/text()"));
+        }
         configDetails.add(scmUrls);
     }
 
